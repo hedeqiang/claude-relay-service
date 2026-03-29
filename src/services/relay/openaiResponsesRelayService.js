@@ -10,6 +10,7 @@ const crypto = require('crypto')
 const LRUCache = require('../../utils/lruCache')
 const upstreamErrorHelper = require('../../utils/upstreamErrorHelper')
 const { updateRateLimitCounters } = require('../../utils/rateLimitHelper')
+const { extractCodexSessionId } = require('../../utils/codexClientHeaders')
 
 // lastUsedAt 更新节流（每账户 60 秒内最多更新一次，使用 LRU 防止内存泄漏）
 const lastUsedAtThrottle = new LRUCache(1000) // 最多缓存 1000 个账户
@@ -93,7 +94,7 @@ class OpenAIResponsesRelayService {
   async handleRequest(req, res, account, apiKeyData) {
     let abortController = null
     // 获取会话哈希（如果有的话）
-    const sessionId = req.headers['session_id'] || req.body?.session_id
+    const sessionId = extractCodexSessionId(req.headers, req.body)
     const sessionHash = sessionId
       ? crypto.createHash('sha256').update(sessionId).digest('hex')
       : null
@@ -378,7 +379,7 @@ class OpenAIResponsesRelayService {
       }
 
       // 处理非流式响应
-      return this._handleNormalResponse(response, res, account, apiKeyData, req.body?.model, req)
+      return this._handleNormalResponse(response, res, account, apiKeyData, req, req.body?.model)
     } catch (error) {
       // 清理 AbortController
       if (abortController && !abortController.signal.aborted) {
@@ -688,7 +689,7 @@ class OpenAIResponsesRelayService {
       // 如果在流式响应中检测到限流
       if (rateLimitDetected) {
         // 使用统一调度器处理限流（与非流式响应保持一致）
-        const sessionId = req.headers['session_id'] || req.body?.session_id
+        const sessionId = extractCodexSessionId(req.headers, req.body)
         const sessionHash = sessionId
           ? crypto.createHash('sha256').update(sessionId).digest('hex')
           : null
@@ -751,7 +752,7 @@ class OpenAIResponsesRelayService {
   }
 
   // 处理非流式响应
-  async _handleNormalResponse(response, res, account, apiKeyData, requestedModel, req) {
+  async _handleNormalResponse(response, res, account, apiKeyData, req, requestedModel) {
     const responseData = response.data
 
     // 提取 usage 数据和实际 model
