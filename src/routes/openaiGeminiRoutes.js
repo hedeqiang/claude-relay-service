@@ -8,6 +8,7 @@ const { getAvailableModels } = require('../services/relay/geminiRelayService')
 const crypto = require('crypto')
 const apiKeyService = require('../services/apiKeyService')
 const { updateRateLimitCounters } = require('../utils/rateLimitHelper')
+const { createRequestDetailMeta } = require('../utils/requestDetailHelper')
 
 // 生成会话哈希
 function generateSessionHash(req) {
@@ -575,7 +576,13 @@ router.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
               0, // cacheReadTokens
               model,
               account.id,
-              'gemini'
+              'gemini',
+              null,
+              createRequestDetailMeta(req, {
+                requestBody: req.body,
+                stream: true,
+                statusCode: res.statusCode
+              })
             )
             logger.info(
               `📊 Recorded Gemini stream usage - Input: ${totalUsage.promptTokenCount}, Output: ${totalUsage.candidatesTokenCount}, Total: ${totalUsage.totalTokenCount}`
@@ -690,7 +697,13 @@ router.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
             0, // cacheReadTokens
             model,
             account.id,
-            'gemini'
+            'gemini',
+            null,
+            createRequestDetailMeta(req, {
+              requestBody: req.body,
+              stream: false,
+              statusCode: res.statusCode || 200
+            })
           )
           logger.info(
             `📊 Recorded Gemini usage - Input: ${openaiResponse.usage.prompt_tokens}, Output: ${openaiResponse.usage.completion_tokens}, Total: ${openaiResponse.usage.total_tokens}`

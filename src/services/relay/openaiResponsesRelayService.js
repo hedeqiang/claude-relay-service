@@ -11,6 +11,10 @@ const LRUCache = require('../../utils/lruCache')
 const upstreamErrorHelper = require('../../utils/upstreamErrorHelper')
 const { updateRateLimitCounters } = require('../../utils/rateLimitHelper')
 const { extractCodexSessionId } = require('../../utils/codexClientHeaders')
+const {
+  createRequestDetailMeta,
+  extractOpenAICacheReadTokens
+} = require('../../utils/requestDetailHelper')
 
 // lastUsedAt 更新节流（每账户 60 秒内最多更新一次，使用 LRU 防止内存泄漏）
 const lastUsedAtThrottle = new LRUCache(1000) // 最多缓存 1000 个账户
@@ -623,7 +627,7 @@ class OpenAIResponsesRelayService {
           const outputTokens = usageData.output_tokens || usageData.completion_tokens || 0
 
           // 提取缓存相关的 tokens（如果存在）
-          const cacheReadTokens = usageData.input_tokens_details?.cached_tokens || 0
+          const cacheReadTokens = extractOpenAICacheReadTokens(usageData)
           const cacheCreateTokens = extractCacheCreationTokens(usageData)
           // 计算实际输入token（总输入减去缓存部分）
           const actualInputTokens = Math.max(0, totalInputTokens - cacheReadTokens)
@@ -642,7 +646,12 @@ class OpenAIResponsesRelayService {
             modelToRecord,
             account.id,
             'openai-responses',
-            serviceTier
+            serviceTier,
+            createRequestDetailMeta(req, {
+              requestBody: req.body,
+              stream: true,
+              statusCode: res.statusCode
+            })
           )
 
           logger.info(
@@ -769,7 +778,7 @@ class OpenAIResponsesRelayService {
         const outputTokens = usageData.output_tokens || usageData.completion_tokens || 0
 
         // 提取缓存相关的 tokens（如果存在）
-        const cacheReadTokens = usageData.input_tokens_details?.cached_tokens || 0
+        const cacheReadTokens = extractOpenAICacheReadTokens(usageData)
         const cacheCreateTokens = extractCacheCreationTokens(usageData)
         // 计算实际输入token（总输入减去缓存部分）
         const actualInputTokens = Math.max(0, totalInputTokens - cacheReadTokens)
@@ -787,7 +796,12 @@ class OpenAIResponsesRelayService {
           actualModel,
           account.id,
           'openai-responses',
-          serviceTier
+          serviceTier,
+          createRequestDetailMeta(req, {
+            requestBody: req?.body,
+            stream: false,
+            statusCode: response.status
+          })
         )
 
         logger.info(
