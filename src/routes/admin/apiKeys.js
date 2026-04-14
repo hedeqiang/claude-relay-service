@@ -6,6 +6,7 @@ const logger = require('../../utils/logger')
 const CostCalculator = require('../../utils/costCalculator')
 const slidingWindowRateLimit = require('../../utils/slidingWindowRateLimit')
 const config = require('../../../config/config')
+const requestBodyRuleService = require('../../services/requestBodyRuleService')
 
 const router = express.Router()
 
@@ -1484,7 +1485,10 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       icon, // 新增：图标
       serviceRates, // API Key 级别服务倍率
       weeklyResetDay, // 周费用重置日 (1-7)
-      weeklyResetHour // 周费用重置时 (0-23)
+      weeklyResetHour, // 周费用重置时 (0-23)
+      enableOpenAIResponsesCodexAdaptation,
+      enableOpenAIResponsesPayloadRules,
+      openaiResponsesPayloadRules
     } = req.body
 
     // 输入验证
@@ -1617,6 +1621,29 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       return res.status(400).json({ error: serviceRatesError })
     }
 
+    if (
+      enableOpenAIResponsesCodexAdaptation !== undefined &&
+      typeof enableOpenAIResponsesCodexAdaptation !== 'boolean'
+    ) {
+      return res
+        .status(400)
+        .json({ error: 'enableOpenAIResponsesCodexAdaptation must be a boolean' })
+    }
+
+    if (
+      enableOpenAIResponsesPayloadRules !== undefined &&
+      typeof enableOpenAIResponsesPayloadRules !== 'boolean'
+    ) {
+      return res.status(400).json({ error: 'enableOpenAIResponsesPayloadRules must be a boolean' })
+    }
+
+    const payloadRulesValidation = requestBodyRuleService.validateAndNormalizeRules(
+      openaiResponsesPayloadRules
+    )
+    if (!payloadRulesValidation.valid) {
+      return res.status(400).json({ error: payloadRulesValidation.error })
+    }
+
     // 验证周费用重置配置
     if (weeklyResetDay !== undefined && weeklyResetDay !== null && weeklyResetDay !== '') {
       const day = Number(weeklyResetDay)
@@ -1669,7 +1696,14 @@ router.post('/api-keys', authenticateAdmin, async (req, res) => {
       weeklyResetHour:
         weeklyResetHour !== undefined && weeklyResetHour !== null && weeklyResetHour !== ''
           ? Number(weeklyResetHour)
-          : 0
+          : 0,
+      enableOpenAIResponsesCodexAdaptation:
+        enableOpenAIResponsesCodexAdaptation !== undefined
+          ? enableOpenAIResponsesCodexAdaptation
+          : true,
+      enableOpenAIResponsesPayloadRules:
+        enableOpenAIResponsesPayloadRules !== undefined ? enableOpenAIResponsesPayloadRules : false,
+      openaiResponsesPayloadRules: payloadRulesValidation.rules
     })
 
     logger.success(`🔑 Admin created new API key: ${name}`)
@@ -2078,7 +2112,10 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
       ownerId, // 新增：所有者ID字段
       serviceRates, // API Key 级别服务倍率
       weeklyResetDay, // 周费用重置日 (1-7)
-      weeklyResetHour // 周费用重置时 (0-23)
+      weeklyResetHour, // 周费用重置时 (0-23)
+      enableOpenAIResponsesCodexAdaptation,
+      enableOpenAIResponsesPayloadRules,
+      openaiResponsesPayloadRules
     } = req.body
 
     // 只允许更新指定字段
@@ -2271,6 +2308,34 @@ router.put('/api-keys/:keyId', authenticateAdmin, async (req, res) => {
         return res.status(400).json({ error: singleServiceRatesError })
       }
       updates.serviceRates = serviceRates
+    }
+
+    if (enableOpenAIResponsesCodexAdaptation !== undefined) {
+      if (typeof enableOpenAIResponsesCodexAdaptation !== 'boolean') {
+        return res
+          .status(400)
+          .json({ error: 'enableOpenAIResponsesCodexAdaptation must be a boolean' })
+      }
+      updates.enableOpenAIResponsesCodexAdaptation = enableOpenAIResponsesCodexAdaptation
+    }
+
+    if (enableOpenAIResponsesPayloadRules !== undefined) {
+      if (typeof enableOpenAIResponsesPayloadRules !== 'boolean') {
+        return res
+          .status(400)
+          .json({ error: 'enableOpenAIResponsesPayloadRules must be a boolean' })
+      }
+      updates.enableOpenAIResponsesPayloadRules = enableOpenAIResponsesPayloadRules
+    }
+
+    if (openaiResponsesPayloadRules !== undefined) {
+      const payloadRulesValidation = requestBodyRuleService.validateAndNormalizeRules(
+        openaiResponsesPayloadRules
+      )
+      if (!payloadRulesValidation.valid) {
+        return res.status(400).json({ error: payloadRulesValidation.error })
+      }
+      updates.openaiResponsesPayloadRules = payloadRulesValidation.rules
     }
 
     // 处理周费用重置配置
